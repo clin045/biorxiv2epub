@@ -1,9 +1,12 @@
 # biorxiv2epub
-Convert Biorxiv articles to epubs for on-the-go reading. Currently will produce readbly formatted texts, but does not handle references.
+Convert biorxiv articles to epubs for on-the-go reading. This is accomplished by parsing through the JATS XML source provided by biorxiv, converting this to a markdown document, and then using pandoc to convert to epub. Currently will produce readbly formatted texts, but does not handle references.
 
 
+PDF             |  EPUB
+:-------------------------:|:-------------------------:
+![](screenshots/pdf.png) | ![](screenshots/epub.png)
 ## Requirements
-- pypandoc
+- pandoc
 
 ## Usage
 ```

@@ -3,7 +3,7 @@ import requests
 import os
 import re
 import argparse
-import pypandoc
+import subprocess
 
 def get_content_url(url):
     r = requests.get(url)
@@ -23,8 +23,7 @@ def resolve_xref(node):
 def resolve_formula(node):
     fname = node[0][0].attrib['{http://schema.highwire.org/Journal}id']
     resp = requests.get(content_url + "/embed/" + fname + ".gif")
-    os.makedirs("img",exist_ok=True)
-    savepath = "img/" + fname + ".gif"
+    savepath = f"{article_id}_img/" + fname + ".gif"
     with open(savepath,"wb+") as f:
         f.write(resp.content)
     if node.tag == "disp-formula":
@@ -44,9 +43,8 @@ def parse_fig(node):
     cap_text = parse_par(list(cap.iter("p"))[0])
     graphic_id = node.attrib['{http://schema.highwire.org/Journal}id']
     fname = graphic_id
-    os.makedirs("img",exist_ok=True)
     resp = requests.get(content_url + "/" + fname + ".large.jpg")
-    savepath = "img/" + fname + ".jpg"
+    savepath = f"{article_id}_img/" + fname + ".jpg"
     with open(savepath,"wb+") as f:
         f.write(resp.content)
     fullcap = f'**{label} {title}** {cap_text}'
@@ -133,6 +131,10 @@ if __name__ == "__main__":
     parser.add_argument("url", help="biorxiv article URL")
     args = parser.parse_args()
 
+    global article_id
+    article_id = "".join(args.url.split("/")[-1].split("."))
+    os.makedirs(f"{article_id}_img",exist_ok=True)
+
     global content_url
     content_url = get_content_url(args.url)
     xml_url = content_url + ".source.xml"
@@ -151,7 +153,8 @@ if __name__ == "__main__":
     for sec in body:
         mdtext += parse_sec(sec,1)
 
-    with open("converted.md","w+") as f:
+    with open(f'{article_id}.md',"w+") as f:
         f.write("\n\n".join(mdtext))
-    pypandoc.convert_file("converted.md","epub",outputfile="converted.epub")
+    cmd = ["pandoc", f"{article_id}.md","-o", f"{article_id}.epub"]
+    subprocess.Popen(cmd)
 
