@@ -7,7 +7,6 @@ import subprocess
 
 def get_content_url(url):
     r = requests.get(url)
-    #print(r.text)
     suffix = re.search(r'data-apath=\"(.*?)\"',r.text).groups(1)[0]
     suffix_clean = ".".join(suffix.split(".")[:-1])
     content_url = "https://www.biorxiv.org/content" + suffix_clean
@@ -51,6 +50,12 @@ def parse_fig(node):
     link_string = f'\n![{fullcap}]({savepath})\n'
     return link_string
 
+def parse_list(node):
+    list_string = "\n"
+    for c in node:
+        list_string += ("- " + "\n".join(parse_sec(c,1)) + "\n")
+    return list_string
+
 def sanitize(text):
     if text is None:
         return ""
@@ -75,8 +80,10 @@ def parse_par(node):
             partext.append(resolve_formula(c))
         elif(c.tag == "ext-link"):
             partext.append(c.text)
+        elif(c.tag == "list"):
+            partext.append(parse_list(c))
         else:
-            print(c.tag)
+            print("Unknown tag:" + c.tag)
         partext.append(sanitize(c.tail))
     return "".join(partext)
 
@@ -119,7 +126,7 @@ def parse_meta(front):
     authstring = ", ".join(authors)
     titleblock = f"""
 ---
-title: {title}
+title: "{title}"
 author: {authstring}
 date: {year}
 ---
