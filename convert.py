@@ -1,14 +1,19 @@
-import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import fromstring, ElementTree
 import requests
 import os
 import re
+import argparse
+import pypandoc
 
 def get_content_url(url):
-    url = "https://www.biorxiv.org/content/10.1101/2021.12.22.473901v1"
     r = requests.get(url)
-    thumburl = re.search(r'\"article\_thumbnail\"\ content=\"(.*?)\"',r.text).groups(1)[0]
-    content_url = "/".join(thumburl.split("/")[:-1])
+    #print(r.text)
+    suffix = re.search(r'data-apath=\"(.*?)\"',r.text).groups(1)[0]
+    suffix_clean = ".".join(suffix.split(".")[:-1])
+    content_url = "https://www.biorxiv.org/content" + suffix_clean
     return content_url
+
+
 
 def resolve_xref(node):
     rid = node.attrib['rid']
@@ -17,7 +22,7 @@ def resolve_xref(node):
 
 def resolve_formula(node):
     fname = node[0][0].attrib['{http://schema.highwire.org/Journal}id']
-    resp = requests.get(content_url + "/" + fname + ".gif")
+    resp = requests.get(content_url + "/embed/" + fname + ".gif")
     os.makedirs("img",exist_ok=True)
     savepath = "img/" + fname + ".gif"
     with open(savepath,"wb+") as f:
@@ -32,12 +37,15 @@ def resolve_formula(node):
 def parse_fig(node):
     label = list(node.iter("label"))[0].text
     cap = list(node.iter("caption"))[0]
-    title = list(cap.iter("title"))[0].text
+    if len(list(cap.iter("title"))) > 0:
+        title = list(cap.iter("title"))[0].text
+    else:
+        title = ""
     cap_text = parse_par(list(cap.iter("p"))[0])
     graphic_id = node.attrib['{http://schema.highwire.org/Journal}id']
     fname = graphic_id
     os.makedirs("img",exist_ok=True)
-    resp = requests.get(content_url[:-6] + "/" + fname + ".large.jpg")
+    resp = requests.get(content_url + "/" + fname + ".large.jpg")
     savepath = "img/" + fname + ".jpg"
     with open(savepath,"wb+") as f:
         f.write(resp.content)
@@ -67,6 +75,8 @@ def parse_par(node):
             partext.append(f'<sub>{c.text}</sub>')
         elif(c.tag == "inline-formula" or c.tag == "disp-formula"):
             partext.append(resolve_formula(c))
+        elif(c.tag == "ext-link"):
+            partext.append(c.text)
         else:
             print(c.tag)
         partext.append(sanitize(c.tail))
@@ -105,7 +115,8 @@ def parse_meta(front):
     title = front[1][8][0].text
     for c in front[1][10]:
         if(c.tag == "contrib"):
-            authors.append(c[0].attrib['{http://schema.highwire.org/Journal}sortable'])
+            name_node = list(c.iter("name"))[0]
+            authors.append(name_node.attrib['{http://schema.highwire.org/Journal}sortable'])
     year = list(front[1].iter("history"))[0][2][2].text
     authstring = ", ".join(authors)
     titleblock = f"""
@@ -117,20 +128,30 @@ date: {year}
     """
     return titleblock
 
-mdtext = []
-tree = ET.parse("2021.12.22.473901.source.xml")
-root = tree.getroot()
-front, body, back = root
-global content_url
-content_url = get_content_url("test")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("url", help="biorxiv article URL")
+    args = parser.parse_args()
 
-Parse the metadata
-mdtext.append(parse_meta(front))
-# Parse abstract
-mdtext += parse_sec(front[1][27], 1)
-# Parse body
-for sec in body:
-    mdtext += parse_sec(sec,1)
+    global content_url
+    content_url = get_content_url(args.url)
+    xml_url = content_url + ".source.xml"
+    print(xml_url)
+    xml = requests.get(xml_url).content
+   
+    tree = ElementTree((fromstring(xml)))
+    front, body, back = tree.getroot()
 
-with open("converted.md","w+") as f:
-    f.write("\n\n".join(mdtext))
+    # Parse the metadata
+    mdtext = []
+    mdtext.append(parse_meta(front))
+    # Parse abstract
+    mdtext += parse_sec(front[1][27], 1)
+    # Parse body
+    for sec in body:
+        mdtext += parse_sec(sec,1)
+
+    with open("converted.md","w+") as f:
+        f.write("\n\n".join(mdtext))
+    pypandoc.convert_file("converted.md","epub",outputfile="converted.epub")
+
